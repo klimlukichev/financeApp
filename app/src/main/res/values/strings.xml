@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Финансы</string>
+    <string name="home_title">Мои траты</string>
+    <string name="home_chart_title">Расходы за месяц</string>
+    <string name="home_recent_title">Последние операции</string>
+    <string name="home_empty_transactions">Нет транзакций. Нажмите «Добавить».</string>
+    <string name="home_empty_chart">Нет данных за текущий месяц</string>
+    <string name="action_add">Добавить</string>
+    <string name="dialog_add_title">Новая трата</string>
+    <string name="dialog_amount_hint">Сумма</string>
+    <string name="dialog_note_hint">Комментарий (необязательно)</string>
+    <string name="dialog_category_label">Категория</string>
+    <string name="dialog_save">Сохранить</string>
+    <string name="dialog_cancel">Отмена</string>
+    <string name="error_invalid_amount">Введите корректную сумму</string>
+</resources>
