@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 @Entity(
     tableName = "transactions",
@@ -18,6 +19,7 @@ import androidx.room.PrimaryKey
     indices = [
         Index("categoryId"),
         Index("date"),
+        Index(value = ["importHash"], unique = true),
     ],
 )
 data class TransactionEntity(
@@ -27,4 +29,9 @@ data class TransactionEntity(
     val date: Long,
     val categoryId: Long,
     val note: String?,
+    @ColumnInfo(defaultValue = "EXPENSE")
+    val type: String,
+    val sourceBank: String?,
+    val sourceDescription: String?,
+    val importHash: String?,
 )

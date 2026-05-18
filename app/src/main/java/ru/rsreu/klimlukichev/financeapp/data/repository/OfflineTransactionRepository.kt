@@ -17,6 +17,9 @@ class OfflineTransactionRepository(
     override suspend fun insert(transaction: Transaction): Long =
         transactionDao.insert(transaction.toEntity())
 
+    override suspend fun insertAllIgnore(transactions: List<Transaction>): List<Long> =
+        transactionDao.insertAllIgnore(transactions.map { it.toEntity() })
+
     override fun observeByPeriod(startDate: Long, endDate: Long): Flow<List<Transaction>> =
         transactionDao.observeByPeriod(startDate, endDate)
             .map { entities -> entities.map { it.toDomain() } }

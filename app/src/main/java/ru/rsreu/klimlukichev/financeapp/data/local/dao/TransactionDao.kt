@@ -16,6 +16,9 @@ interface TransactionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(transaction: TransactionEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllIgnore(transactions: List<TransactionEntity>): List<Long>
+
     @Update
     suspend fun update(transaction: TransactionEntity)
 
@@ -54,6 +57,7 @@ interface TransactionDao {
             ON t.categoryId = c.id
             AND t.date >= :startDate
             AND t.date <= :endDate
+            AND t.type = 'EXPENSE'
         GROUP BY c.id, c.name
         ORDER BY totalAmount DESC
         """,

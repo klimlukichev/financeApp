@@ -6,4 +6,8 @@ data class Transaction(
     val date: Long,
     val categoryId: Long,
     val note: String? = null,
+    val type: TransactionType = TransactionType.EXPENSE,
+    val sourceBank: String? = null,
+    val sourceDescription: String? = null,
+    val importHash: String? = null,
 )

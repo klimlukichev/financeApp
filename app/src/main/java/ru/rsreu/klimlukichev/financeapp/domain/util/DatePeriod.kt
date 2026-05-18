@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.YearMonth
+import java.time.temporal.WeekFields
 
 data class DatePeriod(
     val startInclusive: Long,
@@ -37,5 +38,25 @@ object DatePeriodFactory {
             .toInstant()
             .toEpochMilli()
         return DatePeriod(startInclusive = start, endInclusive = end)
+    }
+
+    fun weekOf(instantMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): DatePeriod {
+        val date = Instant.ofEpochMilli(instantMillis).atZone(zoneId).toLocalDate()
+        val startDate = date.with(WeekFields.ISO.dayOfWeek(), 1)
+        val endDate = startDate.plusDays(6)
+        val start = startDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val end = endDate.atTime(23, 59, 59, 999_000_000)
+            .atZone(zoneId)
+            .toInstant()
+            .toEpochMilli()
+        return DatePeriod(startInclusive = start, endInclusive = end)
+    }
+
+    fun weekKey(instantMillis: Long, zoneId: ZoneId = ZoneId.systemDefault()): String {
+        val date = Instant.ofEpochMilli(instantMillis).atZone(zoneId).toLocalDate()
+        val weekFields = WeekFields.ISO
+        val weekBasedYear = date.get(weekFields.weekBasedYear())
+        val weekOfYear = date.get(weekFields.weekOfWeekBasedYear())
+        return "$weekBasedYear-W${weekOfYear.toString().padStart(2, '0')}"
     }
 }
