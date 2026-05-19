@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +33,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,8 +51,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import org.koin.androidx.compose.koinViewModel
 import ru.rsreu.klimlukichev.financeapp.R
 import java.text.NumberFormat
@@ -63,15 +68,17 @@ fun HomeScreen(
     viewModel: HomeViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val contentResolver = LocalContext.current.contentResolver
     val snackbarHostState = remember { SnackbarHostState() }
     var isMonthPickerVisible by remember { mutableStateOf(false) }
+    var isSettingsVisible by remember { mutableStateOf(false) }
+    var pendingSnackbar by remember { mutableStateOf<PendingSnackbar?>(null) }
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/csv"),
     ) { uri ->
         if (uri != null) {
             runCatching {
-                context.contentResolver.openOutputStream(uri)
+                contentResolver.openOutputStream(uri)
             }.onSuccess { outputStream ->
                 if (outputStream != null) {
                     viewModel.onExportDocumentCreated(outputStream)
@@ -90,7 +97,7 @@ fun HomeScreen(
     ) { uri ->
         if (uri != null) {
             runCatching {
-                context.contentResolver.openOutputStream(uri)
+                contentResolver.openOutputStream(uri)
             }.onSuccess { outputStream ->
                 if (outputStream != null) {
                     viewModel.onPdfReportDocumentCreated(outputStream)
@@ -109,7 +116,7 @@ fun HomeScreen(
     ) { uri ->
         if (uri != null) {
             runCatching {
-                context.contentResolver.openInputStream(uri)
+                contentResolver.openInputStream(uri)
             }.onSuccess { inputStream ->
                 if (inputStream != null) {
                     viewModel.onImportDocumentSelected(inputStream)
@@ -121,14 +128,17 @@ fun HomeScreen(
             }
         }
     }
+    val appLocale = remember(uiState.languageTag) {
+        Locale.forLanguageTag(uiState.languageTag)
+    }
     val currencyFormat = remember {
-        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ru-RU")).apply {
+        NumberFormat.getCurrencyInstance(CURRENCY_LOCALE).apply {
             maximumFractionDigits = 0
             minimumFractionDigits = 0
         }
     }
-    val monthFormatter = remember {
-        DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag("ru-RU"))
+    val monthFormatter = remember(appLocale) {
+        DateTimeFormatter.ofPattern(MONTH_YEAR_PATTERN, appLocale)
     }
     val selectedMonthLabel = remember(uiState.selectedMonth) {
         uiState.selectedMonth.format(monthFormatter)
@@ -155,54 +165,66 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(viewModel, context) {
-        viewModel.exportMessages.collect { message ->
-            val text = when (message) {
-                is ExportMessage.Success -> context.getString(
-                    R.string.export_success,
-                    message.transactionCount,
-                )
-                ExportMessage.Error -> context.getString(R.string.export_error)
+    LaunchedEffect(viewModel) {
+        supervisorScope {
+            launch {
+                viewModel.exportMessages.collect { message ->
+                    pendingSnackbar = PendingSnackbar.Export(message)
+                }
             }
-            snackbarHostState.showSnackbar(text)
+            launch {
+                viewModel.pdfReportMessages.collect { message ->
+                    pendingSnackbar = PendingSnackbar.PdfReport(message)
+                }
+            }
+            launch {
+                viewModel.importMessages.collect { message ->
+                    pendingSnackbar = PendingSnackbar.Import(message)
+                }
+            }
+            launch {
+                viewModel.budgetMessages.collect { message ->
+                    pendingSnackbar = PendingSnackbar.Budget(message)
+                }
+            }
         }
     }
 
-    LaunchedEffect(viewModel, context) {
-        viewModel.pdfReportMessages.collect { message ->
-            val text = when (message) {
-                is ExportMessage.Success -> context.getString(
-                    R.string.pdf_report_success,
-                    message.transactionCount,
-                )
-                ExportMessage.Error -> context.getString(R.string.pdf_report_error)
-            }
-            snackbarHostState.showSnackbar(text)
+    val snackbarText = when (val snackbar = pendingSnackbar) {
+        is PendingSnackbar.Export -> when (val message = snackbar.message) {
+            is ExportMessage.Success -> stringResource(
+                R.string.export_success,
+                message.transactionCount,
+            )
+            ExportMessage.Error -> stringResource(R.string.export_error)
         }
+        is PendingSnackbar.PdfReport -> when (val message = snackbar.message) {
+            is ExportMessage.Success -> stringResource(
+                R.string.pdf_report_success,
+                message.transactionCount,
+            )
+            ExportMessage.Error -> stringResource(R.string.pdf_report_error)
+        }
+        is PendingSnackbar.Import -> when (val message = snackbar.message) {
+            is ImportMessage.Success -> stringResource(
+                R.string.import_success,
+                message.importedCount,
+                message.duplicateCount,
+            )
+            is ImportMessage.Error -> message.reason?.let { reason ->
+                stringResource(R.string.import_error_with_reason, reason)
+            } ?: stringResource(R.string.import_error)
+        }
+        is PendingSnackbar.Budget -> when (snackbar.message) {
+            BudgetMessage.Saved -> stringResource(R.string.budget_saved)
+        }
+        null -> null
     }
 
-    LaunchedEffect(viewModel, context) {
-        viewModel.importMessages.collect { message ->
-            val text = when (message) {
-                is ImportMessage.Success -> context.getString(
-                    R.string.import_success,
-                    message.importedCount,
-                    message.duplicateCount,
-                )
-                is ImportMessage.Error -> message.reason
-                    ?.let { context.getString(R.string.import_error_with_reason, it) }
-                    ?: context.getString(R.string.import_error)
-            }
-            snackbarHostState.showSnackbar(text)
-        }
-    }
-
-    LaunchedEffect(viewModel, context) {
-        viewModel.budgetMessages.collect { message ->
-            val text = when (message) {
-                BudgetMessage.Saved -> context.getString(R.string.budget_saved)
-            }
-            snackbarHostState.showSnackbar(text)
+    LaunchedEffect(snackbarText) {
+        snackbarText?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            pendingSnackbar = null
         }
     }
 
@@ -243,11 +265,10 @@ fun HomeScreen(
                 onPreviousMonthClick = viewModel::onPreviousMonthClick,
                 onNextMonthClick = viewModel::onNextMonthClick,
                 onMonthLabelClick = { isMonthPickerVisible = true },
+                onSettingsClick = { isSettingsVisible = true },
                 onExportClick = viewModel::onExportClick,
                 onPdfReportClick = viewModel::onPdfReportClick,
                 onImportClick = viewModel::onImportClick,
-                onWeeklyBudgetInputChange = viewModel::onWeeklyBudgetInputChange,
-                onSaveWeeklyBudgetClick = viewModel::onSaveWeeklyBudgetClick,
                 modifier = Modifier.padding(innerPadding),
             )
         }
@@ -257,6 +278,7 @@ fun HomeScreen(
         MonthSelectionDialog(
             selectedMonth = uiState.selectedMonth,
             monthFormatter = monthFormatter,
+            displayLocale = appLocale,
             onMonthSelected = { month ->
                 viewModel.onMonthSelected(month)
                 isMonthPickerVisible = false
@@ -275,6 +297,17 @@ fun HomeScreen(
             onSave = viewModel::onSaveTransaction,
         )
     }
+
+    if (isSettingsVisible) {
+        SettingsDialog(
+            uiState = uiState,
+            onBudgetInputChange = viewModel::onWeeklyBudgetInputChange,
+            onSaveBudgetClick = viewModel::onSaveWeeklyBudgetClick,
+            onDarkThemeChange = viewModel::onDarkThemeChange,
+            onLanguageSelected = viewModel::onLanguageSelected,
+            onDismiss = { isSettingsVisible = false },
+        )
+    }
 }
 
 @Composable
@@ -287,11 +320,10 @@ private fun HomeContent(
     onPreviousMonthClick: () -> Unit,
     onNextMonthClick: () -> Unit,
     onMonthLabelClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     onExportClick: () -> Unit,
     onPdfReportClick: () -> Unit,
     onImportClick: () -> Unit,
-    onWeeklyBudgetInputChange: (String) -> Unit,
-    onSaveWeeklyBudgetClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -302,7 +334,7 @@ private fun HomeContent(
         contentPadding = PaddingValues(start = 16.dp, top = 20.dp, end = 16.dp, bottom = 104.dp),
     ) {
         item {
-            HomeHeader()
+            HomeHeader(onSettingsClick = onSettingsClick)
             Spacer(modifier = Modifier.height(18.dp))
             MonthlySummaryCard(
                 total = currencyFormat.format(monthlyTotal),
@@ -316,16 +348,6 @@ private fun HomeContent(
                 onExportClick = onExportClick,
                 onPdfReportClick = onPdfReportClick,
                 onImportClick = onImportClick,
-            )
-            Spacer(modifier = Modifier.height(18.dp))
-        }
-
-        item {
-            WeeklyBudgetCard(
-                budgetInput = uiState.weeklyBudgetInput,
-                isSaving = uiState.isWeeklyBudgetSaving,
-                onBudgetInputChange = onWeeklyBudgetInputChange,
-                onSaveClick = onSaveWeeklyBudgetClick,
             )
             Spacer(modifier = Modifier.height(18.dp))
         }
@@ -365,67 +387,190 @@ private fun HomeContent(
 }
 
 @Composable
-private fun HomeHeader() {
-    Column {
-        Text(
-            text = stringResource(R.string.home_title),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.home_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+private fun SettingsDialog(
+    uiState: HomeUiState,
+    onBudgetInputChange: (String) -> Unit,
+    onSaveBudgetClick: () -> Unit,
+    onDarkThemeChange: (Boolean) -> Unit,
+    onLanguageSelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                WeeklyBudgetSettingsSection(
+                    budgetInput = uiState.weeklyBudgetInput,
+                    isSaving = uiState.isWeeklyBudgetSaving,
+                    onBudgetInputChange = onBudgetInputChange,
+                    onSaveClick = onSaveBudgetClick,
+                )
+                ThemeSettingsRow(
+                    isDarkThemeEnabled = uiState.isDarkThemeEnabled,
+                    onDarkThemeChange = onDarkThemeChange,
+                )
+                LanguageSettingsSection(
+                    selectedLanguageTag = uiState.languageTag,
+                    onLanguageSelected = onLanguageSelected,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_close))
+            }
+        },
+    )
 }
 
 @Composable
-private fun WeeklyBudgetCard(
-    budgetInput: String,
-    isSaving: Boolean,
-    onBudgetInputChange: (String) -> Unit,
-    onSaveClick: () -> Unit,
+private fun ThemeSettingsRow(
+    isDarkThemeEnabled: Boolean,
+    onDarkThemeChange: (Boolean) -> Unit,
 ) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = RoundedCornerShape(24.dp),
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.budget_title),
+                text = stringResource(R.string.theme_title),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = stringResource(R.string.budget_subtitle),
+                text = stringResource(R.string.theme_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = budgetInput,
-                onValueChange = onBudgetInputChange,
-                label = { Text(stringResource(R.string.budget_limit_hint)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth(),
+        }
+        Switch(
+            checked = isDarkThemeEnabled,
+            onCheckedChange = onDarkThemeChange,
+        )
+    }
+}
+
+@Composable
+private fun LanguageSettingsSection(
+    selectedLanguageTag: String,
+    onLanguageSelected: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.language_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            LanguageOptionButton(
+                text = stringResource(R.string.language_russian),
+                selected = selectedLanguageTag == LANGUAGE_RU,
+                onClick = { onLanguageSelected(LANGUAGE_RU) },
+                modifier = Modifier.weight(1f),
             )
-            Spacer(modifier = Modifier.height(10.dp))
-            Button(
-                onClick = onSaveClick,
-                enabled = !isSaving,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(R.string.action_save_budget))
-            }
+            LanguageOptionButton(
+                text = stringResource(R.string.language_english),
+                selected = selectedLanguageTag == LANGUAGE_EN,
+                onClick = { onLanguageSelected(LANGUAGE_EN) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageOptionButton(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onClick,
+        colors = ButtonDefaults.textButtonColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant
+            },
+            contentColor = if (selected) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        ),
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier,
+    ) {
+        Text(text)
+    }
+}
+
+@Composable
+private fun HomeHeader(
+    onSettingsClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.home_title),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Center,
+        )
+        TextButton(onClick = onSettingsClick) {
+            Text(stringResource(R.string.action_settings))
+        }
+    }
+}
+
+@Composable
+private fun WeeklyBudgetSettingsSection(
+    budgetInput: String,
+    isSaving: Boolean,
+    onBudgetInputChange: (String) -> Unit,
+    onSaveClick: () -> Unit,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = stringResource(R.string.budget_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.budget_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = budgetInput,
+            onValueChange = onBudgetInputChange,
+            label = { Text(stringResource(R.string.budget_limit_hint)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            shape = RoundedCornerShape(18.dp),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(
+            onClick = onSaveClick,
+            enabled = !isSaving,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_save_budget))
         }
     }
 }
@@ -570,6 +715,7 @@ private fun MonthlySummaryCard(
 private fun MonthSelectionDialog(
     selectedMonth: YearMonth,
     monthFormatter: DateTimeFormatter,
+    displayLocale: Locale,
     onMonthSelected: (YearMonth) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -599,7 +745,7 @@ private fun MonthSelectionDialog(
                             ) {
                                 Text(
                                     text = month.format(monthFormatter)
-                                        .replaceFirstChar { it.titlecase(Locale.forLanguageTag("ru-RU")) },
+                                        .replaceFirstChar { it.titlecase(displayLocale) },
                                     style = MaterialTheme.typography.labelLarge,
                                 )
                             }
@@ -720,4 +866,16 @@ private fun EmptyTransactionsCard() {
     }
 }
 
+private val CURRENCY_LOCALE = Locale.forLanguageTag("ru-RU")
+
 private const val MONTH_PICKER_MONTHS_COUNT = 36
+private const val MONTH_YEAR_PATTERN = "LLLL yyyy"
+private const val LANGUAGE_RU = "ru"
+private const val LANGUAGE_EN = "en"
+
+private sealed interface PendingSnackbar {
+    data class Export(val message: ExportMessage) : PendingSnackbar
+    data class PdfReport(val message: ExportMessage) : PendingSnackbar
+    data class Import(val message: ImportMessage) : PendingSnackbar
+    data class Budget(val message: BudgetMessage) : PendingSnackbar
+}

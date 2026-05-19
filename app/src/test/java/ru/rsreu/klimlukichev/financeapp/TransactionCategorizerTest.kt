@@ -1,6 +1,7 @@
 package ru.rsreu.klimlukichev.financeapp
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import ru.rsreu.klimlukichev.financeapp.domain.categorization.TransactionCategorizer
 import ru.rsreu.klimlukichev.financeapp.domain.model.Category
@@ -14,6 +15,7 @@ class TransactionCategorizerTest {
         Category(name = "Здоровье", iconResId = 0, colorInt = 0, isDefault = true),
         Category(name = "Маркетплейсы", iconResId = 0, colorInt = 0, isDefault = true),
         Category(name = "Связь", iconResId = 0, colorInt = 0, isDefault = true),
+        Category(name = "Переводы", iconResId = 0, colorInt = 0, isDefault = true),
         Category(name = "Прочее", iconResId = 0, colorInt = 0, isDefault = true),
     )
     private val rules = mapOf(
@@ -22,6 +24,8 @@ class TransactionCategorizerTest {
         "tele2" to "Связь",
         "аптека" to "Здоровье",
         "whoosh" to "Транспорт",
+        "сбп" to "Переводы",
+        "перевод" to "Переводы",
     )
 
     @Test
@@ -67,5 +71,29 @@ class TransactionCategorizerTest {
         )
 
         assertEquals("Транспорт", category?.name)
+    }
+
+    @Test
+    fun `does not categorize as transfers by sbp alone`() {
+        val category = categorizer.categorize(
+            text = "Оплата СБП QR в кафе",
+            bankCategory = null,
+            categories = categories,
+            keywordCategoryMap = rules,
+        )
+
+        assertNull(category)
+    }
+
+    @Test
+    fun `categorizes as transfers when operation text contains transfer word`() {
+        val category = categorizer.categorize(
+            text = "Перевод СБП Иванову И И",
+            bankCategory = null,
+            categories = categories,
+            keywordCategoryMap = rules,
+        )
+
+        assertEquals("Переводы", category?.name)
     }
 }

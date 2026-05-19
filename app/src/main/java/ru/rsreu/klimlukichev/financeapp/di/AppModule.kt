@@ -14,8 +14,10 @@ import ru.rsreu.klimlukichev.financeapp.data.importing.SberStatementParser
 import ru.rsreu.klimlukichev.financeapp.data.importing.TBankStatementParser
 import ru.rsreu.klimlukichev.financeapp.data.local.DatabaseSeeder
 import ru.rsreu.klimlukichev.financeapp.data.local.FinanceDatabase
+import ru.rsreu.klimlukichev.financeapp.data.local.themeSettingsDataStore
 import ru.rsreu.klimlukichev.financeapp.data.repository.DataStoreBudgetRepository
 import ru.rsreu.klimlukichev.financeapp.data.repository.DataStoreKeywordCategoryRepository
+import ru.rsreu.klimlukichev.financeapp.data.repository.DataStoreThemeRepository
 import ru.rsreu.klimlukichev.financeapp.data.repository.OfflineCategoryRepository
 import ru.rsreu.klimlukichev.financeapp.data.repository.OfflineTransactionRepository
 import ru.rsreu.klimlukichev.financeapp.domain.categorization.TransactionCategorizer
@@ -23,6 +25,7 @@ import ru.rsreu.klimlukichev.financeapp.domain.importing.BankStatementImportRepo
 import ru.rsreu.klimlukichev.financeapp.domain.repository.BudgetRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.CategoryRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.KeywordCategoryRepository
+import ru.rsreu.klimlukichev.financeapp.domain.repository.ThemeRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.TransactionRepository
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.AddTransactionUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.CheckWeeklyBudgetUseCase
@@ -62,6 +65,9 @@ val appModule = module {
     single<BudgetRepository> {
         DataStoreBudgetRepository(androidContext().budgetSettingsDataStore)
     }
+    single<ThemeRepository> {
+        DataStoreThemeRepository(androidContext().themeSettingsDataStore)
+    }
     single { PdfTextExtractor(androidContext()) }
     single<List<BankStatementParser>> { listOf(TBankStatementParser(), SberStatementParser()) }
     single { BankStatementParserFactory(get()) }
@@ -81,5 +87,5 @@ val appModule = module {
     factory { ImportBankStatementUseCase(get(), get(), get(), get()) }
     factory { RememberCategoryCorrectionUseCase(get(), get()) }
 
-    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 }

@@ -23,6 +23,7 @@ import ru.rsreu.klimlukichev.financeapp.domain.model.Transaction
 import ru.rsreu.klimlukichev.financeapp.domain.model.TransactionType
 import ru.rsreu.klimlukichev.financeapp.domain.repository.BudgetRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.CategoryRepository
+import ru.rsreu.klimlukichev.financeapp.domain.repository.ThemeRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.TransactionRepository
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.AddTransactionUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.CheckWeeklyBudgetUseCase
@@ -52,6 +53,7 @@ class HomeViewModel(
     private val notificationManager: FinanceNotificationManager,
     private val importBankStatementUseCase: ImportBankStatementUseCase,
     private val rememberCategoryCorrectionUseCase: RememberCategoryCorrectionUseCase,
+    private val themeRepository: ThemeRepository,
 ) : ViewModel() {
 
     private val isAddDialogVisible = MutableStateFlow(false)
@@ -150,8 +152,14 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = combine(
         baseUiState,
         suggestedCategory,
-    ) { state, categorySuggestion ->
-        state.copy(suggestedCategory = categorySuggestion)
+        themeRepository.observeDarkThemeEnabled(),
+        themeRepository.observeLanguageTag(),
+    ) { state, categorySuggestion, isDarkThemeEnabled, languageTag ->
+        state.copy(
+            suggestedCategory = categorySuggestion,
+            isDarkThemeEnabled = isDarkThemeEnabled,
+            languageTag = languageTag,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -182,6 +190,18 @@ class HomeViewModel(
 
     fun onWeeklyBudgetInputChange(input: String) {
         weeklyBudgetInput.update { input }
+    }
+
+    fun onDarkThemeChange(enabled: Boolean) {
+        viewModelScope.launch {
+            themeRepository.setDarkThemeEnabled(enabled)
+        }
+    }
+
+    fun onLanguageSelected(languageTag: String) {
+        viewModelScope.launch {
+            themeRepository.setLanguageTag(languageTag)
+        }
     }
 
     fun onSaveWeeklyBudgetClick() {

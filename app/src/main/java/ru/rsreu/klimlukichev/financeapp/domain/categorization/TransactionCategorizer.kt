@@ -17,10 +17,15 @@ class TransactionCategorizer {
         if (normalizedText.isBlank() && normalizedBankCategory.isBlank()) {
             return null
         }
+        val canCategorizeAsTransfer = normalizedText.hasTransferWord() ||
+            normalizedBankCategory.hasTransferWord()
 
         val scores = mutableMapOf<String, Int>()
         BANK_CATEGORY_HINTS.forEach { (bankCategoryHint, categoryName) ->
-            if (normalizedBankCategory.contains(bankCategoryHint)) {
+            if (
+                normalizedBankCategory.contains(bankCategoryHint) &&
+                categoryName.isAllowedCategory(canCategorizeAsTransfer)
+            ) {
                 scores.addScore(categoryName, BANK_CATEGORY_SCORE + bankCategoryHint.length)
             }
         }
@@ -37,7 +42,7 @@ class TransactionCategorizer {
                 else -> 0
             }
 
-            if (score > 0) {
+            if (score > 0 && categoryName.isAllowedCategory(canCategorizeAsTransfer)) {
                 scores.addScore(categoryName, score)
             }
         }
@@ -70,6 +75,15 @@ class TransactionCategorizer {
         this[categoryName] = (this[categoryName] ?: 0) + score
     }
 
+    private fun String.isAllowedCategory(canCategorizeAsTransfer: Boolean): Boolean =
+        !isTransferCategoryName() || canCategorizeAsTransfer
+
+    private fun String.isTransferCategoryName(): Boolean =
+        normalizedForCategorization() == TRANSFER_CATEGORY_NAME
+
+    private fun String.hasTransferWord(): Boolean =
+        TRANSFER_WORD_REGEX.containsMatchIn(this)
+
     companion object {
         fun String.normalizedForCategorization(): String =
             trim()
@@ -84,9 +98,11 @@ class TransactionCategorizer {
         private const val BANK_CATEGORY_SCORE = 75
         private const val TEXT_CONTAINS_SCORE = 45
         private const val MERCHANT_KEY_TOKEN_LIMIT = 4
+        private const val TRANSFER_CATEGORY_NAME = "переводы"
 
         private val CARD_MASK_REGEX = Regex("""\*{2,}\d{2,4}""")
         private val NUMBER_REGEX = Regex("""\b\d{3,}\b""")
+        private val TRANSFER_WORD_REGEX = Regex("""(^|\s)перевод[а-я]*($|\s)""")
         private val SERVICE_PHRASES_REGEX = Regex(
             """\b(операция|карте|карта|оплата|покупка|перевод|rus|qr|p qr|sbp|сбп)\b""",
         )

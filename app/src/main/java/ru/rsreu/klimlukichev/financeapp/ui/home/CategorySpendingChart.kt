@@ -22,9 +22,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.patrykandpatrick.vico.compose.common.Fill
 import com.patrykandpatrick.vico.compose.common.component.TextComponent
@@ -110,7 +114,7 @@ private fun ChartContent(
     if (stats.size == 1) {
         SingleCategoryChart(
             stat = stats.first(),
-            amount = "${currencyFormat.format(stats.first().totalAmount)}\n100%",
+            centerLabel = stats.first().totalAmount.percentOf(total),
             modifier = modifier
                 .fillMaxWidth()
                 .height(220.dp),
@@ -120,9 +124,7 @@ private fun ChartContent(
             chart = rememberPieChart(
                 sliceProvider = PieChart.SliceProvider.series(slices),
                 valueFormatter = PieValueFormatter { _, value, _ ->
-                    val amount = value.toDouble()
-                    val percent = amount.percentOf(total)
-                    "${currencyFormat.format(amount)}\n$percent"
+                    value.toDouble().percentOf(total)
                 },
             ),
             modelProducer = modelProducer,
@@ -148,31 +150,60 @@ private fun ChartContent(
 @Composable
 private fun SingleCategoryChart(
     stat: CategoryStat,
-    amount: String,
+    centerLabel: String,
     modifier: Modifier = Modifier,
 ) {
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
+    val ringSize = 168.dp
+
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(modifier = Modifier.size(172.dp)) {
-            drawCircle(color = Color(stat.colorInt))
-            drawCircle(
-                color = Color.White,
-                radius = size.minDimension * 0.28f,
-                style = Stroke(width = size.minDimension * 0.22f),
+        Canvas(modifier = Modifier.size(ringSize)) {
+            val strokeWidth = size.minDimension * 0.17f
+            val diameter = size.minDimension - strokeWidth
+            val topLeft = Offset(
+                (size.width - diameter) / 2f,
+                (size.height - diameter) / 2f,
+            )
+            val arcSize = Size(diameter, diameter)
+            val arcStyle = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+
+            drawArc(
+                color = trackColor,
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = arcStyle,
+            )
+            drawArc(
+                color = Color(stat.colorInt),
+                startAngle = -90f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = arcStyle,
             )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 28.dp),
+        ) {
             Text(
                 text = stat.categoryName,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
             )
             Text(
-                text = amount,
+                text = centerLabel,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
             )
         }
     }

@@ -12,6 +12,8 @@ data class HomeUiState(
     val weeklyBudgetLimit: Double = 0.0,
     val weeklyBudgetInput: String = "",
     val isWeeklyBudgetSaving: Boolean = false,
+    val isDarkThemeEnabled: Boolean = false,
+    val languageTag: String = "ru",
     val isAddDialogVisible: Boolean = false,
     val transactionInDialog: TransactionItemUi? = null,
     val suggestedCategory: Category? = null,
