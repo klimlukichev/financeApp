@@ -44,7 +44,10 @@ class FinanceNotificationManager(
     }
 
     fun showWeeklyBudgetExceeded(info: BudgetExceededInfo) {
-        val currencyFormat = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ru-RU"))
+        val currencyFormat = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ru-RU")).apply {
+            maximumFractionDigits = 0
+            minimumFractionDigits = 0
+        }
         showNotification(
             notificationId = WEEKLY_BUDGET_NOTIFICATION_ID,
             title = context.getString(R.string.weekly_budget_exceeded_title),

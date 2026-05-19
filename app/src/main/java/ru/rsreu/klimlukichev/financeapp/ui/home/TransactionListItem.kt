@@ -38,7 +38,10 @@ fun TransactionListItem(
     modifier: Modifier = Modifier,
 ) {
     val localCurrencyFormat = remember {
-        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ru-RU"))
+        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ru-RU")).apply {
+            maximumFractionDigits = 0
+            minimumFractionDigits = 0
+        }
     }
     val dateFormatter = remember {
         DateTimeFormatter.ofPattern("d MMM, HH:mm")

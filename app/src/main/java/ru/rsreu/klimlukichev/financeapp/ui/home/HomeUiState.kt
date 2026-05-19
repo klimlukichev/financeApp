@@ -8,6 +8,7 @@ data class HomeUiState(
     val categoryStats: List<CategoryStat> = emptyList(),
     val categories: List<Category> = emptyList(),
     val selectedMonth: YearMonth = YearMonth.now(),
+    val canNavigateNextMonth: Boolean = false,
     val weeklyBudgetLimit: Double = 0.0,
     val weeklyBudgetInput: String = "",
     val isWeeklyBudgetSaving: Boolean = false,

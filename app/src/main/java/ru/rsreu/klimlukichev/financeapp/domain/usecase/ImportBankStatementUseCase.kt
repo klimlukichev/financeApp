@@ -6,6 +6,7 @@ import ru.rsreu.klimlukichev.financeapp.domain.importing.BankStatementImportResu
 import ru.rsreu.klimlukichev.financeapp.domain.importing.BankStatementTransaction
 import ru.rsreu.klimlukichev.financeapp.domain.model.Category
 import ru.rsreu.klimlukichev.financeapp.domain.model.Transaction
+import ru.rsreu.klimlukichev.financeapp.domain.model.TransactionType
 import ru.rsreu.klimlukichev.financeapp.domain.repository.CategoryRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.TransactionRepository
 import java.io.InputStream
@@ -21,6 +22,7 @@ class ImportBankStatementUseCase(
 
     suspend operator fun invoke(inputStream: InputStream): BankStatementImportResult {
         val statementTransactions = importRepository.parse(inputStream)
+            .filter { it.type == TransactionType.EXPENSE }
         val categories = categoryRepository.observeAll().first()
         val fallbackCategory = categories.firstOrNull { it.name.equals(OTHER_CATEGORY_NAME, ignoreCase = true) }
             ?: categories.firstOrNull()
@@ -49,7 +51,11 @@ class ImportBankStatementUseCase(
             statementTransaction.description,
         ).joinToString(" ")
 
-        return categorizeByKeywordsUseCase(searchableText, categories).first()
+        return categorizeByKeywordsUseCase(
+            text = searchableText,
+            categories = categories,
+            bankCategory = statementTransaction.bankCategory,
+        ).first()
             ?: categories.findByName(inferCategoryName(searchableText))
     }
 

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,7 +37,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
 import ru.rsreu.klimlukichev.financeapp.R
 import java.text.NumberFormat
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -61,6 +65,7 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    var isMonthPickerVisible by remember { mutableStateOf(false) }
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/csv"),
     ) { uri ->
@@ -78,6 +83,25 @@ fun HomeScreen(
             }
         } else {
             viewModel.onExportDocumentDismissed()
+        }
+    }
+    val createPdfReportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf"),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)
+            }.onSuccess { outputStream ->
+                if (outputStream != null) {
+                    viewModel.onPdfReportDocumentCreated(outputStream)
+                } else {
+                    viewModel.onPdfReportDocumentOpenFailed()
+                }
+            }.onFailure {
+                viewModel.onPdfReportDocumentOpenFailed()
+            }
+        } else {
+            viewModel.onPdfReportDocumentDismissed()
         }
     }
     val openPdfLauncher = rememberLauncherForActivityResult(
@@ -98,7 +122,10 @@ fun HomeScreen(
         }
     }
     val currencyFormat = remember {
-        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ru-RU"))
+        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("ru-RU")).apply {
+            maximumFractionDigits = 0
+            minimumFractionDigits = 0
+        }
     }
     val monthFormatter = remember {
         DateTimeFormatter.ofPattern("LLLL yyyy", Locale.forLanguageTag("ru-RU"))
@@ -117,6 +144,12 @@ fun HomeScreen(
     }
 
     LaunchedEffect(viewModel) {
+        viewModel.pdfReportRequests.collect { request ->
+            createPdfReportLauncher.launch(request.fileName)
+        }
+    }
+
+    LaunchedEffect(viewModel) {
         viewModel.importRequests.collect {
             openPdfLauncher.launch(arrayOf("application/pdf"))
         }
@@ -130,6 +163,19 @@ fun HomeScreen(
                     message.transactionCount,
                 )
                 ExportMessage.Error -> context.getString(R.string.export_error)
+            }
+            snackbarHostState.showSnackbar(text)
+        }
+    }
+
+    LaunchedEffect(viewModel, context) {
+        viewModel.pdfReportMessages.collect { message ->
+            val text = when (message) {
+                is ExportMessage.Success -> context.getString(
+                    R.string.pdf_report_success,
+                    message.transactionCount,
+                )
+                ExportMessage.Error -> context.getString(R.string.pdf_report_error)
             }
             snackbarHostState.showSnackbar(text)
         }
@@ -196,13 +242,27 @@ fun HomeScreen(
                 onTransactionClick = viewModel::onTransactionClick,
                 onPreviousMonthClick = viewModel::onPreviousMonthClick,
                 onNextMonthClick = viewModel::onNextMonthClick,
+                onMonthLabelClick = { isMonthPickerVisible = true },
                 onExportClick = viewModel::onExportClick,
+                onPdfReportClick = viewModel::onPdfReportClick,
                 onImportClick = viewModel::onImportClick,
                 onWeeklyBudgetInputChange = viewModel::onWeeklyBudgetInputChange,
                 onSaveWeeklyBudgetClick = viewModel::onSaveWeeklyBudgetClick,
                 modifier = Modifier.padding(innerPadding),
             )
         }
+    }
+
+    if (isMonthPickerVisible) {
+        MonthSelectionDialog(
+            selectedMonth = uiState.selectedMonth,
+            monthFormatter = monthFormatter,
+            onMonthSelected = { month ->
+                viewModel.onMonthSelected(month)
+                isMonthPickerVisible = false
+            },
+            onDismiss = { isMonthPickerVisible = false },
+        )
     }
 
     if (uiState.isAddDialogVisible) {
@@ -226,7 +286,9 @@ private fun HomeContent(
     onTransactionClick: (TransactionItemUi) -> Unit,
     onPreviousMonthClick: () -> Unit,
     onNextMonthClick: () -> Unit,
+    onMonthLabelClick: () -> Unit,
     onExportClick: () -> Unit,
+    onPdfReportClick: () -> Unit,
     onImportClick: () -> Unit,
     onWeeklyBudgetInputChange: (String) -> Unit,
     onSaveWeeklyBudgetClick: () -> Unit,
@@ -247,9 +309,12 @@ private fun HomeContent(
                 selectedMonthLabel = selectedMonthLabel,
                 transactionCount = uiState.transactions.size,
                 categoryCount = uiState.categoryStats.size,
+                canNavigateNextMonth = uiState.canNavigateNextMonth,
                 onPreviousMonthClick = onPreviousMonthClick,
                 onNextMonthClick = onNextMonthClick,
+                onMonthLabelClick = onMonthLabelClick,
                 onExportClick = onExportClick,
+                onPdfReportClick = onPdfReportClick,
                 onImportClick = onImportClick,
             )
             Spacer(modifier = Modifier.height(18.dp))
@@ -371,9 +436,12 @@ private fun MonthlySummaryCard(
     selectedMonthLabel: String,
     transactionCount: Int,
     categoryCount: Int,
+    canNavigateNextMonth: Boolean,
     onPreviousMonthClick: () -> Unit,
     onNextMonthClick: () -> Unit,
+    onMonthLabelClick: () -> Unit,
     onExportClick: () -> Unit,
+    onPdfReportClick: () -> Unit,
     onImportClick: () -> Unit,
 ) {
     Card(
@@ -412,16 +480,24 @@ private fun MonthlySummaryCard(
                     ) {
                         Text("<")
                     }
-                    Text(
-                        text = selectedMonthLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.weight(1f),
-                    )
                     TextButton(
-                        onClick = onNextMonthClick,
+                        onClick = onMonthLabelClick,
                         colors = ButtonDefaults.textButtonColors(
                             contentColor = MaterialTheme.colorScheme.onPrimary,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = selectedMonthLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                    TextButton(
+                        onClick = onNextMonthClick,
+                        enabled = canNavigateNextMonth,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.35f),
                         ),
                     ) {
                         Text(">")
@@ -473,9 +549,74 @@ private fun MonthlySummaryCard(
                         Text(stringResource(R.string.action_export_csv))
                     }
                 }
+                Spacer(modifier = Modifier.height(10.dp))
+                TextButton(
+                    onClick = onPdfReportClick,
+                    colors = ButtonDefaults.textButtonColors(
+                        containerColor = Color.White.copy(alpha = 0.22f),
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.action_export_pdf_report))
+                }
             }
         }
     }
+}
+
+@Composable
+private fun MonthSelectionDialog(
+    selectedMonth: YearMonth,
+    monthFormatter: DateTimeFormatter,
+    onMonthSelected: (YearMonth) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val months = remember {
+        val currentMonth = YearMonth.now()
+        List(MONTH_PICKER_MONTHS_COUNT) { index -> currentMonth.minusMonths(index.toLong()) }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.month_picker_title)) },
+        text = {
+            LazyColumn {
+                items(months.chunked(3)) { rowMonths ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        rowMonths.forEach { month ->
+                            TextButton(
+                                onClick = { onMonthSelected(month) },
+                                colors = ButtonDefaults.textButtonColors(
+                                    containerColor = if (month == selectedMonth) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                ),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = month.format(monthFormatter)
+                                        .replaceFirstChar { it.titlecase(Locale.forLanguageTag("ru-RU")) },
+                                    style = MaterialTheme.typography.labelLarge,
+                                )
+                            }
+                        }
+                        repeat(3 - rowMonths.size) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        },
+    )
 }
 
 @Composable
@@ -578,3 +719,5 @@ private fun EmptyTransactionsCard() {
         }
     }
 }
+
+private const val MONTH_PICKER_MONTHS_COUNT = 36

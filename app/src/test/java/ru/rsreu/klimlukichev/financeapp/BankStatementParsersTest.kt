@@ -20,16 +20,21 @@ class BankStatementParsersTest {
             25.03.26 25.03.26 + 3 000.00 ₽ + 3 000.00 ₽	Внутрибанковский перевод с договора
             5292109476
             01.04.26 21:19 01.04.26 149.99 ₽ 149.99 ₽	Оплата в ПЕРЕКРЕСТОК Рязань _P_QR
+            02.04.26 02.04.26 + 1 500.00 + 1 500.00
+            Пополнение. Система быстрых платежей
         """.trimIndent()
 
         val transactions = TBankStatementParser(zoneId).parse(text)
 
-        assertEquals(2, transactions.size)
+        assertEquals(3, transactions.size)
         assertEquals(TransactionType.INCOME, transactions[0].type)
         assertEquals(3_000.0, transactions[0].amount, 0.001)
         assertTrue(transactions[0].description.contains("5292109476"))
         assertEquals(TransactionType.EXPENSE, transactions[1].type)
         assertEquals(149.99, transactions[1].amount, 0.001)
+        assertEquals(TransactionType.INCOME, transactions[2].type)
+        assertEquals(1_500.0, transactions[2].amount, 0.001)
+        assertTrue(transactions[2].description.contains("Пополнение"))
     }
 
     @Test
@@ -37,7 +42,7 @@ class BankStatementParsersTest {
         val text = """
             Выписка по счёту дебетовой карты
             За период 19.04.2026 — 18.05.2026
-            02.05.2026 16:42 Перевод СБП +5 822,00 5 901,60
+            02.05.2026 16:42 Перевод СБП +5 822,00 5 901.00
             02.05.2026 425469 Перевод от Л. Клим Дмитриевич. Операция по карте
             ****7385
             23.04.2026 21:18 Супермаркеты 415,98 2 091,60

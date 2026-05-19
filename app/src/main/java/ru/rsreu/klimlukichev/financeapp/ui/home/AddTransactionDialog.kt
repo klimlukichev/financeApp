@@ -17,10 +17,13 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -36,9 +39,12 @@ import ru.rsreu.klimlukichev.financeapp.R
 import ru.rsreu.klimlukichev.financeapp.domain.model.Category
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToLong
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,22 +57,30 @@ fun AddTransactionDialog(
     onSave: (transactionId: Long?, amount: Double, date: Long, categoryId: Long, note: String?) -> Unit,
 ) {
     val dateFormatter = remember { DateTimeFormatter.ofPattern("dd.MM.yyyy") }
-    val initialDateMillis = remember(transaction?.id, transaction?.date) {
-        transaction?.date?.toLocalDateFromSystemMillis()?.toUtcStartOfDayMillis()
-            ?: LocalDate.now().toUtcStartOfDayMillis()
+    val timeFormatter = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val initialDateTime = remember(transaction?.id, transaction?.date) {
+        transaction?.date?.toLocalDateTimeFromSystemMillis() ?: LocalDateTime.now()
     }
-    var amountText by remember(transaction?.id) { mutableStateOf(transaction?.amount?.toString().orEmpty()) }
+    val initialDateMillis = remember(initialDateTime) { initialDateTime.toLocalDate().toUtcStartOfDayMillis() }
+    var amountText by remember(transaction?.id) { mutableStateOf(transaction?.amount?.roundToLong()?.toString().orEmpty()) }
     var noteText by remember(transaction?.id) { mutableStateOf(transaction?.note.orEmpty()) }
     var selectedCategory by remember(categories, transaction?.categoryId) {
         mutableStateOf(categories.firstOrNull { it.id == transaction?.categoryId } ?: categories.firstOrNull())
     }
     var selectedDateMillis by remember(transaction?.id) { mutableStateOf(initialDateMillis) }
+    var selectedHour by remember(transaction?.id) { mutableStateOf(initialDateTime.hour) }
+    var selectedMinute by remember(transaction?.id) { mutableStateOf(initialDateTime.minute) }
     var categoryExpanded by remember { mutableStateOf(false) }
     var isDatePickerVisible by remember { mutableStateOf(false) }
+    var isTimePickerVisible by remember { mutableStateOf(false) }
     var isCategoryManuallySelected by remember(transaction?.id) { mutableStateOf(transaction != null) }
     var amountError by remember { mutableStateOf(false) }
+    var dateTimeError by remember { mutableStateOf(false) }
     val formattedDate = remember(selectedDateMillis) {
         selectedDateMillis.toLocalDateFromUtcMillis().format(dateFormatter)
+    }
+    val formattedTime = remember(selectedHour, selectedMinute) {
+        LocalTime.of(selectedHour, selectedMinute).format(timeFormatter)
     }
 
     LaunchedEffect(suggestedCategory?.id) {
@@ -119,18 +133,50 @@ fun AddTransactionDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TextButton(
+                        onClick = { isDatePickerVisible = true },
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(stringResource(R.string.dialog_date_value, formattedDate))
+                    }
+                    TextButton(
+                        onClick = { isTimePickerVisible = true },
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(stringResource(R.string.dialog_time_value, formattedTime))
+                    }
+                }
+
                 TextButton(
-                    onClick = { isDatePickerVisible = true },
-                    colors = ButtonDefaults.textButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
+                    onClick = {
+                        val now = LocalDateTime.now()
+                        selectedDateMillis = now.toLocalDate().toUtcStartOfDayMillis()
+                        selectedHour = now.hour
+                        selectedMinute = now.minute
+                        dateTimeError = false
+                    },
                     shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 2.dp),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(stringResource(R.string.dialog_date_value, formattedDate))
+                    Text(stringResource(R.string.dialog_use_current_datetime))
+                }
+                if (dateTimeError) {
+                    Text(
+                        text = stringResource(R.string.error_future_datetime),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
 
                 if (categories.isNotEmpty()) {
@@ -197,10 +243,18 @@ fun AddTransactionDialog(
                             amountError = true
                             return@Button
                         }
+                        val selectedDateTime = LocalDateTime.of(
+                            selectedDateMillis.toLocalDateFromUtcMillis(),
+                            LocalTime.of(selectedHour, selectedMinute),
+                        )
+                        if (selectedDateTime.isAfter(LocalDateTime.now())) {
+                            dateTimeError = true
+                            return@Button
+                        }
                         onSave(
                             transaction?.id,
                             amount,
-                            selectedDateMillis.toLocalDateFromUtcMillis().toSystemStartOfDayMillis(),
+                            selectedDateTime.toSystemMillis(),
                             categoryId,
                             noteText,
                         )
@@ -214,8 +268,16 @@ fun AddTransactionDialog(
     )
 
     if (isDatePickerVisible) {
+        val maxDateMillis = remember { LocalDate.now().toUtcStartOfDayMillis() }
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = selectedDateMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+                    utcTimeMillis <= maxDateMillis
+
+                override fun isSelectableYear(year: Int): Boolean =
+                    year <= LocalDate.now().year
+            },
         )
         DatePickerDialog(
             onDismissRequest = { isDatePickerVisible = false },
@@ -223,6 +285,7 @@ fun AddTransactionDialog(
                 TextButton(
                     onClick = {
                         selectedDateMillis = datePickerState.selectedDateMillis ?: selectedDateMillis
+                        dateTimeError = false
                         isDatePickerVisible = false
                     },
                 ) {
@@ -238,16 +301,48 @@ fun AddTransactionDialog(
             DatePicker(state = datePickerState)
         }
     }
+
+    if (isTimePickerVisible) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = selectedHour,
+            initialMinute = selectedMinute,
+            is24Hour = true,
+        )
+        AlertDialog(
+            onDismissRequest = { isTimePickerVisible = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        selectedHour = timePickerState.hour
+                        selectedMinute = timePickerState.minute
+                        dateTimeError = false
+                        isTimePickerVisible = false
+                    },
+                ) {
+                    Text(stringResource(R.string.dialog_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isTimePickerVisible = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            },
+            text = { TimePicker(state = timePickerState) },
+        )
+    }
 }
 
 private fun LocalDate.toUtcStartOfDayMillis(): Long =
     atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
 
-private fun LocalDate.toSystemStartOfDayMillis(): Long =
-    atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+private fun LocalDateTime.toSystemMillis(): Long =
+    atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
 private fun Long.toLocalDateFromUtcMillis(): LocalDate =
     Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate()
 
 private fun Long.toLocalDateFromSystemMillis(): LocalDate =
     Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDate()
+
+private fun Long.toLocalDateTimeFromSystemMillis(): LocalDateTime =
+    Instant.ofEpochMilli(this).atZone(ZoneId.systemDefault()).toLocalDateTime()

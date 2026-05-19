@@ -1,6 +1,7 @@
 package ru.rsreu.klimlukichev.financeapp.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
@@ -105,20 +107,30 @@ private fun ChartContent(
         }
     }
 
-    PieChartHost(
-        chart = rememberPieChart(
-            sliceProvider = PieChart.SliceProvider.series(slices),
-            valueFormatter = PieValueFormatter { _, value, _ ->
-                val amount = value.toDouble()
-                val percent = amount.percentOf(total)
-                "${currencyFormat.format(amount)}\n$percent"
-            },
-        ),
-        modelProducer = modelProducer,
-        modifier = modifier
-            .fillMaxWidth()
-            .height(220.dp),
-    )
+    if (stats.size == 1) {
+        SingleCategoryChart(
+            stat = stats.first(),
+            amount = "${currencyFormat.format(stats.first().totalAmount)}\n100%",
+            modifier = modifier
+                .fillMaxWidth()
+                .height(220.dp),
+        )
+    } else {
+        PieChartHost(
+            chart = rememberPieChart(
+                sliceProvider = PieChart.SliceProvider.series(slices),
+                valueFormatter = PieValueFormatter { _, value, _ ->
+                    val amount = value.toDouble()
+                    val percent = amount.percentOf(total)
+                    "${currencyFormat.format(amount)}\n$percent"
+                },
+            ),
+            modelProducer = modelProducer,
+            modifier = modifier
+                .fillMaxWidth()
+                .height(220.dp),
+        )
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -128,6 +140,39 @@ private fun ChartContent(
             CategoryLegendItem(
                 stat = stat,
                 amount = "${currencyFormat.format(stat.totalAmount)} (${stat.totalAmount.percentOf(total)})",
+            )
+        }
+    }
+}
+
+@Composable
+private fun SingleCategoryChart(
+    stat: CategoryStat,
+    amount: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(172.dp)) {
+            drawCircle(color = Color(stat.colorInt))
+            drawCircle(
+                color = Color.White,
+                radius = size.minDimension * 0.28f,
+                style = Stroke(width = size.minDimension * 0.22f),
+            )
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = stat.categoryName,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = amount,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

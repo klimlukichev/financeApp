@@ -22,7 +22,8 @@ class SberStatementParser(
         val result = mutableListOf<PendingSberOperation>()
         var current: PendingSberOperation? = null
 
-        text.lineSequence()
+        text.normalizeStatementText()
+            .lineSequence()
             .map { it.trim() }
             .forEach { line ->
                 if (line.isBlank() || line.isNoise()) return@forEach
@@ -38,7 +39,7 @@ class SberStatementParser(
                 current = current?.copy(
                     description = listOfNotNull(current?.description, description)
                         .joinToString(" ")
-                        .normalizeSpaces(),
+                        .normalizeStatementSpaces(),
                 )
             }
 
@@ -53,7 +54,7 @@ class SberStatementParser(
                 description = operation.description
                     .removeCardMaskOnlyTail()
                     .ifBlank { operation.bankCategory }
-                    .normalizeSpaces(),
+                    .normalizeStatementSpaces(),
                 bankCategory = operation.bankCategory,
             )
         }
@@ -62,7 +63,7 @@ class SberStatementParser(
     private fun MatchResult.toPendingOperation(): PendingSberOperation {
         val operationDate = groupValues[1]
         val operationTime = groupValues[2]
-        val bankCategory = groupValues[3].normalizeSpaces()
+        val bankCategory = groupValues[3].normalizeStatementSpaces()
         val amountText = groupValues[4]
 
         val date = LocalDate.parse(operationDate, dateFormatter)
@@ -71,7 +72,7 @@ class SberStatementParser(
 
         return PendingSberOperation(
             date = dateTime.atZone(zoneId).toInstant().toEpochMilli(),
-            amount = amountText.parseAmount(),
+            amount = amountText.parseStatementAmount(),
             type = if (amountText.trim().startsWith("+")) TransactionType.INCOME else TransactionType.EXPENSE,
             bankCategory = bankCategory,
             description = "",
@@ -93,17 +94,6 @@ class SberStatementParser(
             startsWith("Дата формирования", ignoreCase = true) ||
             startsWith("ПАО Сбербанк", ignoreCase = true)
 
-    private fun String.parseAmount(): Double =
-        replace("+", "")
-            .replace("−", "")
-            .replace("-", "")
-            .replace(" ", "")
-            .replace(",", ".")
-            .toDouble()
-
-    private fun String.normalizeSpaces(): String =
-        replace(Regex("\\s+"), " ").trim()
-
     private fun String.removeCardMaskOnlyTail(): String =
         replace(Regex("""\s+\*{2,}\d{4}$"""), "")
 
@@ -123,7 +113,7 @@ class SberStatementParser(
         val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         val operationRegex = Regex(
-            """^(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2})\s+(.+?)\s+([+−-]?\s*[\d\s]+,\d{2})\s+([+−-]?\s*[\d\s]+,\d{2})$""",
+            """^(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2})\s+(.+?)\s+([+−-]?\s*[\d\s\u00A0\u202F]+[,.]\d{2})\s+([+−-]?\s*[\d\s\u00A0\u202F]+[,.]\d{2})$""",
         )
         val descriptionRegex = Regex("""^\d{2}\.\d{2}\.\d{4}\s+\d+\s+(.+)$""")
     }

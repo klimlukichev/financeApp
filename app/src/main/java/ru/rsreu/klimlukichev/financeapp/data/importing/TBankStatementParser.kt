@@ -19,47 +19,31 @@ class TBankStatementParser(
             text.contains("Операции по карте", ignoreCase = true)
 
     override fun parse(text: String): List<BankStatementTransaction> {
-        val result = mutableListOf<PendingTBankOperation>()
-        var current: PendingTBankOperation? = null
-
-        text.lineSequence()
-            .map { it.trim() }
-            .forEach { line ->
-                if (line.isBlank() || line.isNoise()) return@forEach
-
-                val match = operationRegex.matchEntire(line)
-                if (match != null) {
-                    current?.let(result::add)
-                    current = match.toPendingOperation()
-                } else {
-                    current = current?.copy(
-                        description = listOf(current?.description, line)
-                            .filterNotNull()
-                            .joinToString(" ")
-                            .normalizeSpaces(),
-                    )
-                }
-            }
-
-        current?.let(result::add)
-
-        return result.map { operation ->
+        val normalizedText = text.normalizeStatementText()
+        return operationRegex.findAll(normalizedText)
+            .map { it.toPendingOperation() }
+            .filterNot { it.description.isNoise() }
+            .map { operation ->
             BankStatementTransaction(
                 bank = BANK_NAME,
                 date = operation.date,
                 amount = operation.amount,
                 type = operation.type,
-                description = operation.description.normalizeSpaces(),
+                    description = operation.description
+                        .removePageMarkerTail()
+                        .ifBlank { "Операция из выписки Т-Банка" }
+                        .normalizeStatementSpaces(),
             )
-        }
+            }
+            .toList()
     }
 
     private fun MatchResult.toPendingOperation(): PendingTBankOperation {
         val operationDate = groupValues[1]
         val operationTime = groupValues[2].takeIf { it.isNotBlank() }
         val isIncome = groupValues[3].isNotBlank() || groupValues[5].isNotBlank()
-        val amount = groupValues[4].parseAmount()
-        val description = groupValues.getOrNull(7).orEmpty()
+        val amount = groupValues[4].parseStatementAmount()
+        val description = groupValues.getOrNull(7).orEmpty().normalizeStatementSpaces()
 
         val date = LocalDate.parse(operationDate, dateFormatter)
         val time = operationTime?.let { LocalTime.parse(it, timeFormatter) } ?: LocalTime.MIDNIGHT
@@ -85,13 +69,8 @@ class TBankStatementParser(
             startsWith("•") ||
             contains("Выписка по договору", ignoreCase = true)
 
-    private fun String.parseAmount(): Double =
-        replace(" ", "")
-            .replace(",", ".")
-            .toDouble()
-
-    private fun String.normalizeSpaces(): String =
-        replace(Regex("\\s+"), " ").trim()
+    private fun String.removePageMarkerTail(): String =
+        replace(Regex("""\s+--\s+\d+\s+of\s+\d+\s+--.*$"""), "")
 
     private data class PendingTBankOperation(
         val date: Long,
@@ -108,7 +87,8 @@ class TBankStatementParser(
         val timeFormatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
         val operationRegex = Regex(
-            """^(\d{2}\.\d{2}\.\d{2})(?:\s+(\d{2}:\d{2}))?\s+\d{2}\.\d{2}\.\d{2}\s+(\+)?\s*([\d\s]+[.,]\d{2})\s*₽\s+(\+)?\s*([\d\s]+[.,]\d{2})\s*₽(?:\s+(.+))?$""",
+            pattern = """(\d{2}\.\d{2}\.\d{2})(?:\s+(\d{2}:\d{2}))?\s+\d{2}\.\d{2}\.\d{2}\s+(\+)?\s*([\d\s\u00A0\u202F]+[.,]\d{2})\s*(?:₽|руб\.?)?\s+(\+)?\s*([\d\s\u00A0\u202F]+[.,]\d{2})\s*(?:₽|руб\.?)?\s*([\s\S]*?)(?=\n\d{2}\.\d{2}\.\d{2}(?:\s+\d{2}:\d{2})?\s+\d{2}\.\d{2}\.\d{2}\s+[+]?\s*[\d\s\u00A0\u202F]+[.,]\d{2}|\z)""",
+            options = setOf(RegexOption.MULTILINE),
         )
     }
 }

@@ -18,6 +18,7 @@ import ru.rsreu.klimlukichev.financeapp.data.repository.DataStoreBudgetRepositor
 import ru.rsreu.klimlukichev.financeapp.data.repository.DataStoreKeywordCategoryRepository
 import ru.rsreu.klimlukichev.financeapp.data.repository.OfflineCategoryRepository
 import ru.rsreu.klimlukichev.financeapp.data.repository.OfflineTransactionRepository
+import ru.rsreu.klimlukichev.financeapp.domain.categorization.TransactionCategorizer
 import ru.rsreu.klimlukichev.financeapp.domain.importing.BankStatementImportRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.BudgetRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.CategoryRepository
@@ -27,9 +28,11 @@ import ru.rsreu.klimlukichev.financeapp.domain.usecase.AddTransactionUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.CheckWeeklyBudgetUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.CategorizeByKeywordsUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.ExportTransactionsUseCase
+import ru.rsreu.klimlukichev.financeapp.domain.usecase.ExportPdfReportUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.GetCategorySpendingUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.GetLastTransactionsUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.ImportBankStatementUseCase
+import ru.rsreu.klimlukichev.financeapp.domain.usecase.RememberCategoryCorrectionUseCase
 import ru.rsreu.klimlukichev.financeapp.notifications.FinanceNotificationManager
 import ru.rsreu.klimlukichev.financeapp.ui.home.HomeViewModel
 
@@ -64,16 +67,19 @@ val appModule = module {
     single { BankStatementParserFactory(get()) }
     single<BankStatementImportRepository> { OfflineBankStatementImportRepository(get(), get()) }
     single { FinanceNotificationManager(androidContext()) }
+    single { TransactionCategorizer() }
 
     single { DatabaseSeeder(get()) }
 
     factory { GetLastTransactionsUseCase(get()) }
     factory { GetCategorySpendingUseCase(get()) }
     factory { AddTransactionUseCase(get()) }
-    factory { CategorizeByKeywordsUseCase(get()) }
+    factory { CategorizeByKeywordsUseCase(get(), get()) }
     factory { ExportTransactionsUseCase(get(), get()) }
+    factory { ExportPdfReportUseCase(get(), get()) }
     factory { CheckWeeklyBudgetUseCase(get(), get()) }
     factory { ImportBankStatementUseCase(get(), get(), get(), get()) }
+    factory { RememberCategoryCorrectionUseCase(get(), get()) }
 
-    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
 }

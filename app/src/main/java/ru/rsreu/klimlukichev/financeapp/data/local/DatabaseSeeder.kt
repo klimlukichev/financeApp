@@ -8,8 +8,13 @@ class DatabaseSeeder(
 ) {
 
     suspend fun seedIfEmpty() {
-        if (categoryRepository.observeAll().first().isEmpty()) {
-            DefaultCategories.items.forEach { categoryRepository.insert(it) }
-        }
+        val existingCategoryNames = categoryRepository.observeAll()
+            .first()
+            .map { it.name.lowercase() }
+            .toSet()
+
+        DefaultCategories.items
+            .filter { it.name.lowercase() !in existingCategoryNames }
+            .forEach { categoryRepository.insert(it) }
     }
 }

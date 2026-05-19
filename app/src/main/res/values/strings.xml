@@ -7,13 +7,14 @@
     <string name="home_categories_count">категорий</string>
     <string name="home_chart_title">Расходы за месяц</string>
     <string name="home_chart_subtitle">Распределение по категориям</string>
-    <string name="home_recent_title">Последние операции</string>
-    <string name="home_recent_subtitle">Нажмите на операцию, чтобы изменить ее</string>
+    <string name="home_recent_title">Операции за выбранный месяц</string>
+    <string name="home_recent_subtitle">Нажмите на месяц выше, чтобы быстро выбрать период</string>
     <string name="home_empty_transactions_title">Пока нет операций</string>
     <string name="home_empty_transactions">Добавьте первую трату, и здесь появится история.</string>
     <string name="home_empty_chart">Нет данных за выбранный месяц</string>
     <string name="action_add">Добавить</string>
     <string name="action_export_csv">Экспорт CSV</string>
+    <string name="action_export_pdf_report">PDF-отчет с диаграммой</string>
     <string name="action_import_pdf">Импорт PDF</string>
     <string name="action_save_budget">Сохранить бюджет</string>
     <string name="budget_limit_hint">Лимит на неделю</string>
@@ -24,6 +25,8 @@
     <string name="daily_reminder_title">Ежедневное напоминание</string>
     <string name="export_success">CSV сохранен: %1$d операций</string>
     <string name="export_error">Не удалось сохранить CSV</string>
+    <string name="pdf_report_success">PDF-отчет сохранен: %1$d операций</string>
+    <string name="pdf_report_error">Не удалось сохранить PDF-отчет</string>
     <string name="import_success">Импортировано: %1$d, дубликатов пропущено: %2$d</string>
     <string name="import_error">Не удалось импортировать выписку</string>
     <string name="import_error_with_reason">Не удалось импортировать выписку: %1$s</string>
@@ -36,9 +39,13 @@
     <string name="dialog_subtitle">Заполните сумму, дату и категорию</string>
     <string name="dialog_amount_hint">Сумма</string>
     <string name="dialog_date_value">Дата: %1$s</string>
+    <string name="dialog_time_value">Время: %1$s</string>
+    <string name="dialog_use_current_datetime">Использовать текущие дату и время</string>
     <string name="dialog_note_hint">Комментарий (необязательно)</string>
     <string name="dialog_category_label">Категория</string>
     <string name="dialog_save">Сохранить</string>
     <string name="dialog_cancel">Отмена</string>
+    <string name="month_picker_title">Выберите месяц</string>
     <string name="error_invalid_amount">Введите корректную сумму</string>
+    <string name="error_future_datetime">Нельзя создать операцию в будущем</string>
 </resources>

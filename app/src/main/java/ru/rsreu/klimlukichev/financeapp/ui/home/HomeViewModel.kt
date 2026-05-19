@@ -23,13 +23,16 @@ import ru.rsreu.klimlukichev.financeapp.domain.model.Transaction
 import ru.rsreu.klimlukichev.financeapp.domain.model.TransactionType
 import ru.rsreu.klimlukichev.financeapp.domain.repository.BudgetRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.CategoryRepository
+import ru.rsreu.klimlukichev.financeapp.domain.repository.TransactionRepository
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.AddTransactionUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.CheckWeeklyBudgetUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.CategorizeByKeywordsUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.ExportTransactionsUseCase
+import ru.rsreu.klimlukichev.financeapp.domain.usecase.ExportPdfReportUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.GetCategorySpendingUseCase
-import ru.rsreu.klimlukichev.financeapp.domain.usecase.GetLastTransactionsUseCase
 import ru.rsreu.klimlukichev.financeapp.domain.usecase.ImportBankStatementUseCase
+import ru.rsreu.klimlukichev.financeapp.domain.usecase.RememberCategoryCorrectionUseCase
+import ru.rsreu.klimlukichev.financeapp.domain.util.DatePeriodFactory
 import ru.rsreu.klimlukichev.financeapp.notifications.FinanceNotificationManager
 import java.io.InputStream
 import java.io.OutputStream
@@ -37,16 +40,18 @@ import java.time.YearMonth
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
-    private val getLastTransactionsUseCase: GetLastTransactionsUseCase,
+    private val transactionRepository: TransactionRepository,
     private val getCategorySpendingUseCase: GetCategorySpendingUseCase,
     private val addTransactionUseCase: AddTransactionUseCase,
     private val categoryRepository: CategoryRepository,
     private val categorizeByKeywordsUseCase: CategorizeByKeywordsUseCase,
     private val exportTransactionsUseCase: ExportTransactionsUseCase,
+    private val exportPdfReportUseCase: ExportPdfReportUseCase,
     private val budgetRepository: BudgetRepository,
     private val checkWeeklyBudgetUseCase: CheckWeeklyBudgetUseCase,
     private val notificationManager: FinanceNotificationManager,
     private val importBankStatementUseCase: ImportBankStatementUseCase,
+    private val rememberCategoryCorrectionUseCase: RememberCategoryCorrectionUseCase,
 ) : ViewModel() {
 
     private val isAddDialogVisible = MutableStateFlow(false)
@@ -57,13 +62,18 @@ class HomeViewModel(
     private val isWeeklyBudgetSaving = MutableStateFlow(false)
     private val _exportRequests = MutableSharedFlow<ExportDocumentRequest>()
     private val _exportMessages = MutableSharedFlow<ExportMessage>()
+    private val _pdfReportRequests = MutableSharedFlow<ExportDocumentRequest>()
+    private val _pdfReportMessages = MutableSharedFlow<ExportMessage>()
     private val _budgetMessages = MutableSharedFlow<BudgetMessage>()
     private val _importRequests = MutableSharedFlow<ImportDocumentRequest>()
     private val _importMessages = MutableSharedFlow<ImportMessage>()
     private var pendingExportMonth: YearMonth? = null
+    private var pendingPdfReportMonth: YearMonth? = null
 
     val exportRequests: SharedFlow<ExportDocumentRequest> = _exportRequests.asSharedFlow()
     val exportMessages: SharedFlow<ExportMessage> = _exportMessages.asSharedFlow()
+    val pdfReportRequests: SharedFlow<ExportDocumentRequest> = _pdfReportRequests.asSharedFlow()
+    val pdfReportMessages: SharedFlow<ExportMessage> = _pdfReportMessages.asSharedFlow()
     val budgetMessages: SharedFlow<BudgetMessage> = _budgetMessages.asSharedFlow()
     val importRequests: SharedFlow<ImportDocumentRequest> = _importRequests.asSharedFlow()
     val importMessages: SharedFlow<ImportMessage> = _importMessages.asSharedFlow()
@@ -71,6 +81,14 @@ class HomeViewModel(
     private val selectedMonthSpending = selectedMonth.flatMapLatest { month ->
         getCategorySpendingUseCase(year = month.year, month = month.monthValue)
             .map { spending -> month to spending }
+    }
+
+    private val selectedMonthTransactions = selectedMonth.flatMapLatest { month ->
+        val period = DatePeriodFactory.monthOf(year = month.year, month = month.monthValue)
+        transactionRepository.observeByPeriod(
+            startDate = period.startInclusive,
+            endDate = period.endInclusive,
+        )
     }
 
     private val budgetUiState = combine(
@@ -106,7 +124,7 @@ class HomeViewModel(
     )
 
     private val baseUiState = combine(
-        getLastTransactionsUseCase(limit = TRANSACTION_LIMIT),
+        selectedMonthTransactions,
         selectedMonthSpending,
         categoryRepository.observeAll(),
         dialogState,
@@ -119,6 +137,7 @@ class HomeViewModel(
             categoryStats = spending.toCategoryStats(categories),
             categories = categories,
             selectedMonth = month,
+            canNavigateNextMonth = month.isBefore(YearMonth.now()),
             weeklyBudgetLimit = budget.weeklyBudgetLimit,
             weeklyBudgetInput = budget.weeklyBudgetInput,
             isWeeklyBudgetSaving = budget.isWeeklyBudgetSaving,
@@ -194,7 +213,16 @@ class HomeViewModel(
     }
 
     fun onNextMonthClick() {
-        selectedMonth.update { it.plusMonths(1) }
+        selectedMonth.update { month ->
+            val nextMonth = month.plusMonths(1)
+            if (nextMonth.isAfter(YearMonth.now())) month else nextMonth
+        }
+    }
+
+    fun onMonthSelected(month: YearMonth) {
+        if (!month.isAfter(YearMonth.now())) {
+            selectedMonth.update { month }
+        }
     }
 
     fun onExportClick() {
@@ -205,6 +233,48 @@ class HomeViewModel(
                 ExportDocumentRequest(fileName = month.toExportFileName()),
             )
         }
+    }
+
+    fun onPdfReportClick() {
+        viewModelScope.launch {
+            val month = selectedMonth.value
+            pendingPdfReportMonth = month
+            _pdfReportRequests.emit(
+                ExportDocumentRequest(fileName = month.toPdfReportFileName()),
+            )
+        }
+    }
+
+    fun onPdfReportDocumentCreated(outputStream: OutputStream) {
+        viewModelScope.launch {
+            runCatching {
+                val month = pendingPdfReportMonth ?: selectedMonth.value
+                withContext(Dispatchers.IO) {
+                    exportPdfReportUseCase(
+                        year = month.year,
+                        month = month.monthValue,
+                        outputStream = outputStream,
+                    )
+                }
+            }.onSuccess { transactionCount ->
+                pendingPdfReportMonth = null
+                _pdfReportMessages.emit(ExportMessage.Success(transactionCount))
+            }.onFailure {
+                pendingPdfReportMonth = null
+                _pdfReportMessages.emit(ExportMessage.Error)
+            }
+        }
+    }
+
+    fun onPdfReportDocumentOpenFailed() {
+        pendingPdfReportMonth = null
+        viewModelScope.launch {
+            _pdfReportMessages.emit(ExportMessage.Error)
+        }
+    }
+
+    fun onPdfReportDocumentDismissed() {
+        pendingPdfReportMonth = null
     }
 
     fun onImportClick() {
@@ -270,9 +340,24 @@ class HomeViewModel(
     }
 
     fun onSaveTransaction(transactionId: Long?, amount: Double, date: Long, categoryId: Long, note: String?) {
+        if (date > System.currentTimeMillis()) return
         viewModelScope.launch {
             val editedTransaction = transactionInDialog.value
             runCatching {
+                val selectedCategory = categoryRepository.getById(categoryId)
+                if (
+                    editedTransaction != null &&
+                    editedTransaction.categoryId != categoryId &&
+                    editedTransaction.isImported &&
+                    selectedCategory != null
+                ) {
+                    rememberCategoryCorrectionUseCase(
+                        sourceDescription = editedTransaction.sourceDescription,
+                        note = editedTransaction.note,
+                        categoryName = selectedCategory.name,
+                    )
+                }
+
                 addTransactionUseCase(
                     Transaction(
                         id = transactionId ?: 0,
@@ -329,6 +414,9 @@ class HomeViewModel(
     private fun YearMonth.toExportFileName(): String =
         "transactions_${year}_${monthValue.toString().padStart(2, '0')}.csv"
 
+    private fun YearMonth.toPdfReportFileName(): String =
+        "finance_report_${year}_${monthValue.toString().padStart(2, '0')}.pdf"
+
     private suspend fun checkAndNotifyWeeklyBudget() {
         checkWeeklyBudgetUseCase()?.let { budgetInfo ->
             notificationManager.showWeeklyBudgetExceeded(budgetInfo)
@@ -339,10 +427,12 @@ class HomeViewModel(
         if (this <= 0.0) "" else toString()
 
     companion object {
-        const val TRANSACTION_LIMIT = 10
         private const val DEFAULT_COLOR = 0xFF9E9E9E.toInt()
     }
 }
+
+private val TransactionItemUi.isImported: Boolean
+    get() = sourceDescription != null || importHash != null
 
 data class ExportDocumentRequest(
     val fileName: String,
