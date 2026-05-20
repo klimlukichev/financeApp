@@ -20,6 +20,7 @@ import ru.rsreu.klimlukichev.financeapp.data.repository.DataStoreKeywordCategory
 import ru.rsreu.klimlukichev.financeapp.data.repository.DataStoreThemeRepository
 import ru.rsreu.klimlukichev.financeapp.data.repository.OfflineCategoryRepository
 import ru.rsreu.klimlukichev.financeapp.data.repository.OfflineTransactionRepository
+import ru.rsreu.klimlukichev.financeapp.domain.analytics.AnalyticsExpenseFilter
 import ru.rsreu.klimlukichev.financeapp.domain.categorization.TransactionCategorizer
 import ru.rsreu.klimlukichev.financeapp.domain.importing.BankStatementImportRepository
 import ru.rsreu.klimlukichev.financeapp.domain.repository.BudgetRepository
@@ -74,16 +75,17 @@ val appModule = module {
     single<BankStatementImportRepository> { OfflineBankStatementImportRepository(get(), get()) }
     single { FinanceNotificationManager(androidContext()) }
     single { TransactionCategorizer() }
+    single { AnalyticsExpenseFilter() }
 
     single { DatabaseSeeder(get()) }
 
     factory { GetLastTransactionsUseCase(get()) }
-    factory { GetCategorySpendingUseCase(get()) }
+    factory { GetCategorySpendingUseCase(get(), get(), get()) }
     factory { AddTransactionUseCase(get()) }
     factory { CategorizeByKeywordsUseCase(get(), get()) }
     factory { ExportTransactionsUseCase(get(), get()) }
-    factory { ExportPdfReportUseCase(get(), get()) }
-    factory { CheckWeeklyBudgetUseCase(get(), get()) }
+    factory { ExportPdfReportUseCase(get(), get(), get()) }
+    factory { CheckWeeklyBudgetUseCase(get(), get(), get(), get()) }
     factory { ImportBankStatementUseCase(get(), get(), get(), get()) }
     factory { RememberCategoryCorrectionUseCase(get(), get()) }
 

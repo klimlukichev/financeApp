@@ -6,6 +6,8 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import kotlinx.coroutines.flow.first
+import ru.rsreu.klimlukichev.financeapp.domain.analytics.AnalyticsExpenseFilter
+import ru.rsreu.klimlukichev.financeapp.domain.analytics.ScopedExpense
 import ru.rsreu.klimlukichev.financeapp.domain.model.Category
 import ru.rsreu.klimlukichev.financeapp.domain.model.Transaction
 import ru.rsreu.klimlukichev.financeapp.domain.model.TransactionType
@@ -23,6 +25,7 @@ import java.util.Locale
 class ExportPdfReportUseCase(
     private val transactionRepository: TransactionRepository,
     private val categoryRepository: CategoryRepository,
+    private val analyticsExpenseFilter: AnalyticsExpenseFilter,
 ) {
 
     suspend operator fun invoke(
@@ -39,6 +42,16 @@ class ExportPdfReportUseCase(
             endDate = period.endInclusive,
         ).first().sortedByDescending { it.date }
 
+        val scopedExpenses = transactions.map { transaction ->
+            ScopedExpense(
+                transaction = transaction,
+                categoryName = categoriesById[transaction.categoryId]?.name.orEmpty(),
+            )
+        }
+        val analyticsExpenses = analyticsExpenseFilter
+            .filterCounted(scopedExpenses, zoneId)
+            .map { it.transaction }
+
         outputStream.use { stream ->
             val document = PdfDocument()
             try {
@@ -46,6 +59,7 @@ class ExportPdfReportUseCase(
                     document = document,
                     yearMonth = YearMonth.of(year, month),
                     transactions = transactions,
+                    analyticsExpenses = analyticsExpenses,
                     categoriesById = categoriesById,
                     zoneId = zoneId,
                 )
@@ -62,6 +76,7 @@ class ExportPdfReportUseCase(
         document: PdfDocument,
         yearMonth: YearMonth,
         transactions: List<Transaction>,
+        analyticsExpenses: List<Transaction>,
         categoriesById: Map<Long, Category>,
         zoneId: ZoneId,
     ) {
@@ -98,7 +113,7 @@ class ExportPdfReportUseCase(
         canvas.drawText("Финансовый отчет", LEFT, 44f, titlePaint)
         canvas.drawText(monthLabel, LEFT, 64f, subtitlePaint)
 
-        val expenses = transactions.filter { it.type == TransactionType.EXPENSE }
+        val expenses = analyticsExpenses
         val incomes = transactions.filter { it.type == TransactionType.INCOME }
         val totalExpense = expenses.sumOf { it.amount }
         val totalIncome = incomes.sumOf { it.amount }

@@ -1,0 +1,22 @@
+erDiagram
+    categories ||--o{ transactions : "categoryId"
+
+    categories {
+        long id PK
+        string name
+        int iconResId
+        int colorInt
+        bool isDefault
+    }
+
+    transactions {
+        long id PK
+        double amount
+        long date
+        long categoryId FK
+        string note
+        string type
+        string sourceBank
+        string sourceDescription
+        string importHash UK
+    }

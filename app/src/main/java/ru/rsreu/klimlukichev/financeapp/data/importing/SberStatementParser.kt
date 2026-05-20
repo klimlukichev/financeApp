@@ -52,7 +52,7 @@ class SberStatementParser(
                 amount = operation.amount,
                 type = operation.type,
                 description = operation.description
-                    .removeCardMaskOnlyTail()
+                    .removeStatementArtifacts()
                     .ifBlank { operation.bankCategory }
                     .normalizeStatementSpaces(),
                 bankCategory = operation.bankCategory,
@@ -79,8 +79,10 @@ class SberStatementParser(
         )
     }
 
-    private fun String.isNoise(): Boolean =
-        startsWith("--") ||
+    private fun String.isNoise(): Boolean {
+        if (isBlank()) return true
+
+        if (startsWith("--") ||
             startsWith("ДАТА ОПЕРАЦИИ", ignoreCase = true) ||
             startsWith("Дата обработки", ignoreCase = true) ||
             startsWith("и код авторизации", ignoreCase = true) ||
@@ -92,10 +94,35 @@ class SberStatementParser(
             startsWith("В валюте счёта", ignoreCase = true) ||
             startsWith("Продолжение на следующей", ignoreCase = true) ||
             startsWith("Дата формирования", ignoreCase = true) ||
-            startsWith("ПАО Сбербанк", ignoreCase = true)
+            startsWith("ПАО Сбербанк", ignoreCase = true) ||
+            startsWith("Выписка по сч", ignoreCase = true) ||
+            startsWith("За период", ignoreCase = true) ||
+            startsWith("СберБанк", ignoreCase = true) ||
+            startsWith("www.", ignoreCase = true)
+        ) {
+            return true
+        }
+
+        return NOISE_LINE_REGEXES.any { it.matches(this) }
+    }
 
     private fun String.removeCardMaskOnlyTail(): String =
         replace(Regex("""\s+\*{2,}\d{4}$"""), "")
+
+    private fun String.removeStatementArtifacts(): String {
+        var cutAt = length
+        PAGE_FOOTER_REGEX.find(this)?.range?.first?.let { index ->
+            if (index in 1 until cutAt) cutAt = index
+        }
+        FOOTER_TEXT_MARKERS.forEach { marker ->
+            val index = indexOf(marker, ignoreCase = true)
+            if (index in 1 until cutAt) cutAt = index
+        }
+        return substring(0, cutAt)
+            .trimEnd()
+            .removeCardMaskOnlyTail()
+            .normalizeStatementSpaces()
+    }
 
     private data class PendingSberOperation(
         val date: Long,
@@ -116,5 +143,39 @@ class SberStatementParser(
             """^(\d{2}\.\d{2}\.\d{4})\s+(\d{2}:\d{2})\s+(.+?)\s+([+−-]?\s*[\d\s\u00A0\u202F]+[,.]\d{2})\s+([+−-]?\s*[\d\s\u00A0\u202F]+[,.]\d{2})$""",
         )
         val descriptionRegex = Regex("""^\d{2}\.\d{2}\.\d{4}\s+\d+\s+(.+)$""")
+
+        val PAGE_FOOTER_REGEX = Regex(
+            """\s+страница\s+\d+\s+из\s+\d+""",
+            RegexOption.IGNORE_CASE,
+        )
+
+        val FOOTER_TEXT_MARKERS = listOf(
+            "документ подписан",
+            "документ сформирован",
+            "сведения об электронн",
+            "простая электронная подпись",
+            "владелец:",
+            "сертификат:",
+            "издатель:",
+            "действителен:",
+            "серийный номер",
+        )
+
+        val NOISE_LINE_REGEXES = listOf(
+            Regex("""^страница\s+\d+\s+из\s+\d+$""", RegexOption.IGNORE_CASE),
+            Regex("""^\d+\s+из\s+\d+$"""),
+            Regex("""^--\s*\d+\s+(?:of|из)\s+\d+\s*--$""", RegexOption.IGNORE_CASE),
+            Regex("""^документ\s+подписан\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^документ\s+сформирован\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^сведения\s+об\s+электронн.*""", RegexOption.IGNORE_CASE),
+            Regex("""^простая\s+электронная\s+подпись\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^владелец\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^сертификат\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^издатель\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^действителен\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^серийн\w*\s+номер\b.*""", RegexOption.IGNORE_CASE),
+            Regex("""^уц\s+.*""", RegexOption.IGNORE_CASE),
+            Regex("""^\*{4}\d{4}$"""),
+        )
     }
 }

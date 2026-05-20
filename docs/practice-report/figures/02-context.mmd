@@ -1,0 +1,18 @@
+flowchart TB
+    user[Пользователь]
+
+    subgraph device [Мобильное устройство Android]
+        app[FinanceApp\nKotlin / Compose]
+        room[(Room DB)]
+        ds[(DataStore)]
+        app --> room
+        app --> ds
+    end
+
+    pdf[PDF-выписка\nиз приложения банка]
+    csv[CSV / PDF отчёт\nна устройстве]
+
+    user <-->|ручной ввод,\nпросмотр| app
+    user -->|выбор файла| pdf
+    pdf -->|локальный разбор| app
+    app -->|экспорт| csv

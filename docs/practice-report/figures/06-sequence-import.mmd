@@ -1,0 +1,33 @@
+sequenceDiagram
+    actor U as Пользователь
+    participant HS as HomeScreen
+    participant VM as HomeViewModel
+    participant UC as ImportBankStatementUseCase
+    participant IR as BankStatementImportRepository
+    participant PDF as PdfTextExtractor
+    participant PF as ParserFactory
+    participant PR as BankStatementParser
+    participant CAT as CategorizeByKeywordsUseCase
+    participant DB as TransactionRepository
+
+    U->>HS: Выбор PDF-файла
+    HS->>VM: importPdf(stream)
+    VM->>UC: invoke(stream)
+    UC->>IR: parse(stream)
+    IR->>PDF: extract(bytes)
+    PDF-->>IR: text
+    IR->>PF: parserFor(text)
+    PF-->>IR: TBank / Sber parser
+    IR->>PR: parse(text)
+    PR-->>IR: List BankStatementTransaction
+    IR-->>UC: operations
+    UC->>UC: filter EXPENSE only
+    loop каждая операция
+        UC->>CAT: chooseCategory
+        CAT-->>UC: Category
+    end
+    UC->>DB: insertAllIgnore
+    DB-->>UC: inserted / ignored
+    UC-->>VM: ImportResult
+    VM-->>HS: Snackbar message
+    HS-->>U: Обновление списка

@@ -1,0 +1,25 @@
+flowchart TB
+    root[ru.rsreu.klimlukichev.financeapp]
+
+    root --> ui[ui/]
+    root --> domain[domain/]
+    root --> data[data/]
+    root --> di[di/]
+    root --> notif[notifications/]
+
+    ui --> ui_home[home/\nHomeScreen, ViewModel]
+    ui --> ui_theme[theme/]
+    ui --> ui_locale[locale/]
+
+    domain --> dom_model[model/]
+    domain --> dom_uc[usecase/]
+    domain --> dom_repo[repository/]
+    domain --> dom_cat[categorization/]
+    domain --> dom_an[analytics/]
+
+    data --> data_local[local/\nRoom, DAO, Entity]
+    data --> data_rep[repository/]
+    data --> data_imp[importing/\nParsers, PDF]
+
+    di --> di_mod[AppModule.kt]
+    notif --> notif_wm[WorkManager,\nNotificationManager]

@@ -1,0 +1,10 @@
+flowchart TB
+    subgraph import [Рис. 10 — Результат импорта PDF]
+        picker["Системный выбор файла:\nstatement_sber_04_2026.pdf"]
+        process["Извлечение текста → парсер Сбер → категоризация"]
+        snack["Snackbar:\n«Импортировано: 47, дубликатов: 3»"]
+        updated["Список операций обновлён"]
+        picker --> process --> snack --> updated
+    end
+
+    style snack fill:#fff9c4,stroke:#f9a825

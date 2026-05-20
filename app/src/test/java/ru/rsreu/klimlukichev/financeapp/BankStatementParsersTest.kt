@@ -1,6 +1,7 @@
 package ru.rsreu.klimlukichev.financeapp
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import ru.rsreu.klimlukichev.financeapp.data.importing.SberStatementParser
@@ -61,5 +62,46 @@ class BankStatementParsersTest {
         assertEquals(415.98, transactions[1].amount, 0.001)
         assertTrue(transactions[1].description.contains("GLOBUS"))
         assertTrue(transactions[1].description.contains("Операция по карте"))
+    }
+
+    @Test
+    fun `sber parser ignores signature and page footer lines`() {
+        val text = """
+            Выписка по счёту дебетовой карты
+            За период 19.04.2026 — 18.05.2026
+            23.04.2026 21:18 Супермаркеты 415,98 2 091,60
+            23.04.2026 645620 GLOBUS TULA_P_QR. Операция по карте
+            ****7385
+            Страница 1 из 2
+            Документ подписан усиленной квалифицированной электронной подписью
+            Сведения об электронной подписи
+            Владелец: ИВАНОВ ИВАН ИВАНОВИЧ
+            Сертификат: 12 34 56 78 90
+            24.04.2026 10:15 Прочие расходы 100,00 1 991,60
+            24.04.2026 111111 COFFEE SHOP
+        """.trimIndent()
+
+        val transactions = SberStatementParser(zoneId).parse(text)
+
+        assertEquals(2, transactions.size)
+        assertTrue(transactions[0].description.contains("GLOBUS"))
+        assertTrue(transactions[0].description.contains("Операция по карте"))
+        assertFalse(transactions[0].description.contains("Страница", ignoreCase = true))
+        assertFalse(transactions[0].description.contains("электронн", ignoreCase = true))
+        assertFalse(transactions[0].description.contains("Сертификат", ignoreCase = true))
+        assertFalse(transactions[0].description.contains("Владелец", ignoreCase = true))
+    }
+
+    @Test
+    fun `sber parser strips footer merged into one pdf line`() {
+        val text = """
+            23.04.2026 21:18 Супермаркеты 415,98 2 091,60
+            23.04.2026 645620 GLOBUS TULA_P_QR. Операция по карте Страница 1 из 2 Документ подписан усиленной квалифицированной электронной подписью
+        """.trimIndent()
+
+        val transactions = SberStatementParser(zoneId).parse(text)
+
+        assertEquals(1, transactions.size)
+        assertEquals("GLOBUS TULA_P_QR. Операция по карте", transactions[0].description)
     }
 }

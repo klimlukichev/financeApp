@@ -1,0 +1,15 @@
+flowchart TB
+    subgraph tests [Рис. 11 — Модульное тестирование]
+        gradle["gradlew :app:testDebugUnitTest"]
+        subgraph suite [14 тестов — SUCCESS]
+            t1[BankStatementParsersTest — 4]
+            t2[TransactionCategorizerTest — 5]
+            t3[AnalyticsExpenseFilterTest — 4]
+            t4[ExampleUnitTest — 1]
+        end
+        manual["Ручное тестирование на эмуляторе:\nимпорт, UI, бюджет, экспорт"]
+        gradle --> suite
+        suite --> manual
+    end
+
+    style suite fill:#e8f5e9,stroke:#388e3c

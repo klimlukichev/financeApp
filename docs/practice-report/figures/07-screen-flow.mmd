@@ -1,0 +1,23 @@
+stateDiagram-v2
+    [*] --> MainScreen: запуск приложения
+
+    MainScreen --> AddDialog: FAB / редактирование
+    AddDialog --> MainScreen: сохранить / отмена
+
+    MainScreen --> MonthDialog: выбор месяца
+    MonthDialog --> MainScreen: OK
+
+    MainScreen --> SettingsDialog: кнопка настроек
+    SettingsDialog --> MainScreen: закрыть\n(тема / язык / бюджет)
+
+    MainScreen --> SystemPicker: импорт PDF
+    SystemPicker --> MainScreen: файл выбран
+
+    MainScreen --> ExportPicker: экспорт CSV / PDF
+    ExportPicker --> MainScreen: файл сохранён
+
+    note right of MainScreen
+        Главный экран:
+        итог, диаграмма,
+        список операций
+    end note

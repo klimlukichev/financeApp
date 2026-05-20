@@ -1,0 +1,42 @@
+flowchart TB
+    subgraph ui [Слой UI]
+        MA[MainActivity]
+        HS[HomeScreen / Compose]
+        VM[HomeViewModel]
+        MA --> HS
+        HS <--> VM
+    end
+
+    subgraph domain [Слой Domain]
+        UC[Use Cases]
+        TR[TransactionRepository]
+        CR[CategoryRepository]
+        BR[BudgetRepository / ThemeRepository]
+        TC[TransactionCategorizer]
+        AF[AnalyticsExpenseFilter]
+        UC --> TR
+        UC --> CR
+        UC --> BR
+        UC --> TC
+        UC --> AF
+    end
+
+    subgraph data [Слой Data]
+        OR[OfflineTransactionRepository]
+        OC[OfflineCategoryRepository]
+        IMP[BankStatement Parsers\nT-Bank / Sber]
+        PDF[PdfTextExtractor]
+        ROOM[(Room)]
+        DS[(DataStore)]
+        OR --> ROOM
+        OC --> ROOM
+        IMP --> PDF
+    end
+
+    VM --> UC
+    TR -.-> OR
+    CR -.-> OC
+
+    style ui fill:#e3f2fd
+    style domain fill:#e8f5e9
+    style data fill:#fff3e0
