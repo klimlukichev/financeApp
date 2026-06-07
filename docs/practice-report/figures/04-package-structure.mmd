@@ -1,25 +1,41 @@
 flowchart TB
     root[ru.rsreu.klimlukichev.financeapp]
 
-    root --> ui[ui/]
-    root --> domain[domain/]
-    root --> data[data/]
-    root --> di[di/]
-    root --> notif[notifications/]
+    subgraph ui [ui/]
+        direction TB
+        ui_home["home/ — HomeScreen, ViewModel"]
+        ui_theme[theme/]
+        ui_locale[locale/]
+    end
 
-    ui --> ui_home[home/\nHomeScreen, ViewModel]
-    ui --> ui_theme[theme/]
-    ui --> ui_locale[locale/]
+    subgraph domain [domain/]
+        direction TB
+        dom_model[model/]
+        dom_uc[usecase/]
+        dom_repo[repository/]
+        dom_cat[categorization/]
+        dom_an[analytics/]
+    end
 
-    domain --> dom_model[model/]
-    domain --> dom_uc[usecase/]
-    domain --> dom_repo[repository/]
-    domain --> dom_cat[categorization/]
-    domain --> dom_an[analytics/]
+    subgraph data [data/]
+        direction TB
+        data_local["local/ — Room, DAO, Entity"]
+        data_rep[repository/]
+        data_imp["importing/ — Parsers, PDF"]
+    end
 
-    data --> data_local[local/\nRoom, DAO, Entity]
-    data --> data_rep[repository/]
-    data --> data_imp[importing/\nParsers, PDF]
+    subgraph di [di/]
+        direction TB
+        di_mod[AppModule.kt]
+    end
 
-    di --> di_mod[AppModule.kt]
-    notif --> notif_wm[WorkManager,\nNotificationManager]
+    subgraph notif [notifications/]
+        direction TB
+        notif_wm["WorkManager, NotificationManager"]
+    end
+
+    root --> ui
+    ui --> domain
+    domain --> data
+    data --> di
+    di --> notif

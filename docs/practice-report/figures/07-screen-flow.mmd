@@ -1,23 +1,17 @@
-stateDiagram-v2
-    [*] --> MainScreen: запуск приложения
+flowchart TB
+    start([Запуск приложения]) --> m1["MainScreen<br/>итог · диаграмма · список"]
 
-    MainScreen --> AddDialog: FAB / редактирование
-    AddDialog --> MainScreen: сохранить / отмена
+    m1 -->|FAB / редактирование| add[AddTransactionDialog]
+    add -->|сохранить / отмена| m2[MainScreen]
 
-    MainScreen --> MonthDialog: выбор месяца
-    MonthDialog --> MainScreen: OK
+    m2 -->|выбор месяца| month[MonthSelectionDialog]
+    month -->|OK| m3[MainScreen]
 
-    MainScreen --> SettingsDialog: кнопка настроек
-    SettingsDialog --> MainScreen: закрыть\n(тема / язык / бюджет)
+    m3 -->|настройки| settings[SettingsDialog<br/>бюджет · тема · язык]
+    settings -->|закрыть| m4[MainScreen]
 
-    MainScreen --> SystemPicker: импорт PDF
-    SystemPicker --> MainScreen: файл выбран
+    m4 -->|импорт PDF| import[SystemPicker PDF]
+    import -->|файл выбран| m5[MainScreen]
 
-    MainScreen --> ExportPicker: экспорт CSV / PDF
-    ExportPicker --> MainScreen: файл сохранён
-
-    note right of MainScreen
-        Главный экран:
-        итог, диаграмма,
-        список операций
-    end note
+    m5 -->|экспорт CSV / PDF| export[SystemPicker]
+    export -->|файл сохранён| m6[MainScreen]
