@@ -16,3 +16,4 @@
 local.properties
 *.pdf
 *.PDF
+/scripts/
